@@ -429,6 +429,44 @@ Toolbar:
 
 
 _ARTIST_CONTROL_PROFILES = {
+    "look_recipe": {
+        "unchanged": {},
+        "Leica M6 clean coral-green editorial": {
+            "high_level_description": "clean Leica rangefinder editorial image with cool daylight, green-cyan shadow density, coral skin highlights, and restrained high-end analog texture",
+            "aesthetics": "high-end analog fashion photograph, Leica M6 rangefinder color response, cinestock 800T-like local color covariance, cool daylight base, shadows biased slightly green-cyan, highlights biased slightly coral, smooth fine film texture, no fake halation, no HDR, no plastic retouching",
+            "lighting": "cool north-window daylight, weak negative fill from the darker side of the room, subtle coral warmth only in skin edges and highlights, local color covariance rather than obvious digital split-toning",
+            "photo": "Leica M6, 50mm Summicron-M, clean professional color-negative scan, natural lens falloff, realistic sharpness, restrained fine grain, f/4, subject close but not macro",
+            "color_palette": ["#101413", "#1F3A32", "#263D36", "#6E756C", "#B9B1A5", "#E8D8CB", "#F0A58F", "#FFD0C0"],
+        },
+        "Leica M3 natural rangefinder grit": {
+            "high_level_description": "natural Leica M3-style 35mm rangefinder photograph with candid framing, available light, tactile skin and fabric, and no AI-poster polish",
+            "aesthetics": "classic 35mm rangefinder realism, understated contrast, human-scale imperfection, natural skin texture, organic edge sharpness, restrained grain, no fake antique damage",
+            "lighting": "available light with believable falloff, gentle highlight rolloff, shadows allowed to stay natural instead of lifted into HDR",
+            "photo": "Leica M3 rangefinder, 50mm lens feel, eye-level candid perspective, slight human framing imperfection, clean color-negative or black-and-white scan depending on the base prompt",
+        },
+        "Canon G7X Mark II flash digicam": {
+            "high_level_description": "compact Canon G7X Mark II flash photo with direct subject exposure, humid real-world atmosphere, saturated summer color, and casual non-studio realism",
+            "aesthetics": "2010s compact digicam realism, 1-inch CMOS feel, flash-dominant subject exposure, saturated blues and greens, JPEG color response, slight compact-camera harshness, no HDR, no glossy stock-photo finish",
+            "lighting": "direct on-camera flash mixed with late-afternoon sun, flash white balance, crisp foreground exposure, localized specular skin highlights, background allowed to fall off naturally",
+            "photo": "Canon PowerShot G7X Mark II, built-in zoom around 24mm equivalent, ISO 125, 1/1000s, f/2.8 to f/4, flash always firing, compact-camera depth and perspective",
+        },
+        "ARRI Alexa daylight rolloff": {
+            "high_level_description": "digital cinema daylight frame with ARRI Alexa-like color science, soft highlight rolloff, controlled saturation, and natural skin",
+            "aesthetics": "ARRI Alexa-like motion-picture color pipeline, natural skin tones, controlled saturation, deep but clean shadows, creamy highlight rolloff, no fake film scratches, no crunchy artificial grain",
+            "lighting": "cool bright daytime light, highlights can bloom or clip gently while skin remains believable, balanced greens and blues, no harsh AI-poster contrast",
+            "photo": "digital cinema camera feel, natural motion-picture sharpness, stable dynamic range, believable focus plane and optical falloff",
+        },
+        "Kodak Portra 400 clean Frontier scan": {
+            "aesthetics": "Kodak Portra 400 color-negative response, natural skin tones, soft pastel color, gentle highlight rolloff, clean neutral Frontier lab scan, restrained contrast, fine natural grain",
+            "lighting": "skin-friendly color separation with lifted but not flat shadows, highlights remain soft and printable",
+            "photo": "35mm color negative film, rated at box speed, clean professional scan, no artificial digital smoothness",
+        },
+        "CineStill 800T tungsten practical": {
+            "aesthetics": "CineStill 800T tungsten-balanced color negative response, cinematic color separation, pronounced red halation only around bright practical highlights, denser shadows, visible but controlled grain",
+            "lighting": "warm tungsten practicals with subtle neon spill, small bright light sources in frame, red halation tied to real highlight sources rather than red frame edges",
+            "photo": "35mm tungsten-balanced color negative film, practical-light night interior or storefront feel, clean scan without fake scratches",
+        },
+    },
     "lens": {
         "unchanged": {},
         "portrait telephoto": {
@@ -509,6 +547,33 @@ def _append_artist_text(existing, addition):
     return f"{existing}. {addition}"
 
 
+def _append_artist_list(existing, addition):
+    base = existing if isinstance(existing, list) else []
+    out = list(base)
+    seen = {str(item).lower() for item in out}
+    for item in addition:
+        key = str(item).lower()
+        if key not in seen:
+            out.append(item)
+            seen.add(key)
+    return out
+
+
+def _apply_artist_profile(caption, profile):
+    style = caption.setdefault("style_description", {})
+    if not isinstance(style, dict):
+        style = {}
+        caption["style_description"] = style
+
+    for field, value in profile.items():
+        if field == "high_level_description":
+            caption[field] = _append_artist_text(caption.get(field, ""), value)
+        elif isinstance(value, list):
+            style[field] = _append_artist_list(style.get(field), value)
+        else:
+            style[field] = _append_artist_text(style.get(field, ""), value)
+
+
 def _loads_artist_caption(prompt):
     try:
         parsed = json.loads(prompt)
@@ -524,7 +589,7 @@ class Ideogram4ArtistControlsKJ(io.ComfyNode):
             node_id="Ideogram4ArtistControlsKJ",
             display_name="Ideogram 4 Artist Controls KJ",
             category="KJNodes/text",
-            search_aliases=["ideogram", "artist controls", "lens", "color", "surface"],
+            search_aliases=["ideogram", "artist controls", "look recipe", "camera", "film", "lens", "color", "surface"],
             is_experimental=True,
             description="""
 Deterministic pro-artist control layer for Ideogram 4 structured JSON prompts.
@@ -532,11 +597,14 @@ Deterministic pro-artist control layer for Ideogram 4 structured JSON prompts.
 Use this after Ideogram 4 Prompt Builder KJ. It appends concise, named control
 profiles into the standard Ideogram JSON fields instead of adding non-standard
 schema keys. This keeps runtime latency at zero and preserves compatibility with
-existing Ideogram workflows while making lens, color, and surface intent explicit.
+existing Ideogram workflows while making look, lens, color, and surface intent explicit.
 """,
             inputs=[
                 io.String.Input("prompt", multiline=True, force_input=True,
                                 tooltip="Structured Ideogram JSON prompt from Ideogram 4 Prompt Builder KJ."),
+                io.Combo.Input("look_recipe", options=list(_ARTIST_CONTROL_PROFILES["look_recipe"].keys()),
+                               default="unchanged",
+                               tooltip="One coherent capture/look recipe. Use lens, color, and surface controls as overrides."),
                 io.Combo.Input("lens_profile", options=list(_ARTIST_CONTROL_PROFILES["lens"].keys()),
                                default="unchanged",
                                tooltip="Camera/lens behavior to append to photo, aesthetics, and lighting fields."),
@@ -559,7 +627,7 @@ existing Ideogram workflows while making lens, color, and surface intent explici
         )
 
     @classmethod
-    def execute(cls, prompt, lens_profile="unchanged", color_profile="unchanged",
+    def execute(cls, prompt, look_recipe="unchanged", lens_profile="unchanged", color_profile="unchanged",
                 surface_profile="unchanged", control_strength="medium",
                 artist_notes="", output_format="compact") -> io.NodeOutput:
         caption = _loads_artist_caption(prompt)
@@ -572,20 +640,20 @@ existing Ideogram workflows while making lens, color, and surface intent explici
             caption["style_description"] = style
 
         for group, selected in (
+            ("look_recipe", look_recipe),
             ("lens", lens_profile),
             ("color", color_profile),
             ("surface", surface_profile),
         ):
             profile = _ARTIST_CONTROL_PROFILES[group].get(selected, {})
-            for field, text in profile.items():
-                style[field] = _append_artist_text(style.get(field, ""), text)
+            _apply_artist_profile(caption, profile)
 
         if artist_notes.strip():
             notes = artist_notes.strip()
             if control_strength == "light":
                 notes = notes.split(".")[0].strip()
             elif control_strength == "strong":
-                notes = _append_artist_text(notes, "prioritize this control intent over generic style drift")
+                notes = _append_artist_text(notes, "preserve this control intent over generic AI-poster polish")
             caption["high_level_description"] = _append_artist_text(
                 caption.get("high_level_description", ""),
                 notes,

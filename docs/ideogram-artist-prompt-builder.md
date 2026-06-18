@@ -55,6 +55,7 @@ concise control language into standard Ideogram fields.
 
 It currently supports:
 
+- look recipes
 - lens profiles
 - color profiles
 - surface/material profiles
@@ -69,6 +70,46 @@ It intentionally does not add new non-standard JSON keys. Instead it augments:
 - `high_level_description`
 
 This is a compatibility-first bridge while the full canvas UX is redesigned.
+
+## Look Grammar
+
+The current roadmap is informed by a filmmaker-style benchmark pattern:
+separate the look into causes that artists can reason about.
+
+Useful axes:
+
+- capture system: Leica M3/M6 rangefinder, Canon G7X Mark II flash digicam,
+  ARRI Alexa daylight cinema frame, phone/raw sensor, compact digital flash
+- film or sensor response: Portra 400, CineStill 800T, clean digital cinema,
+  2010s compact JPEG, phone computational image
+- light behavior: cool diffuse ambient, north-window daylight, tungsten
+  practicals, on-camera flash plus sun, bright blown daytime highlights
+- process and scan: clean Frontier-style scan, pushed one stop, professional
+  drum scan, JPEG flash white balance
+- texture policy: natural pores, vellus hair, fabric weave, fine grain, no
+  crunchy scan artifacts, no fake scratches, no plastic skin
+- local color behavior: shadow hue bias, highlight hue bias, split tone distance,
+  halation tied to real light sources, local color covariance instead of broad
+  digital tinting
+
+This is why the node now exposes a single `look_recipe` control first. A recipe
+should be a coherent capture assumption, not a mood label. For example, `Canon
+G7X Mark II flash digicam` implies direct flash, compact-camera perspective,
+JPEG color response, saturated summer blues/greens, and no HDR. The separate
+lens, color, and surface controls are then overrides for users who need more
+specific direction.
+
+## Current Look Recipes
+
+- `Leica M6 clean coral-green editorial`
+- `Leica M3 natural rangefinder grit`
+- `Canon G7X Mark II flash digicam`
+- `ARRI Alexa daylight rolloff`
+- `Kodak Portra 400 clean Frontier scan`
+- `CineStill 800T tungsten practical`
+
+These recipes intentionally map into normal Ideogram fields rather than adding
+custom JSON keys. The output remains inspectable text.
 
 ## Planned UI Redesign
 
