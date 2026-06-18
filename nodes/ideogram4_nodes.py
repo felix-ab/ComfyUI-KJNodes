@@ -638,15 +638,6 @@ def _merge_section(parsed, explicit, key):
     return "\n".join(parts)
 
 
-def _lines_matching(lines, keywords):
-    out = []
-    for line in lines:
-        low = line.lower()
-        if any(k in low for k in keywords):
-            out.append(line)
-    return out
-
-
 def _join_control_lines(lines):
     seen = set()
     out = []
@@ -721,11 +712,6 @@ existing Ideogram workflows while making look, lens, color, and surface intent e
         caption = _loads_artist_caption(prompt)
         if caption is None:
             caption = {"high_level_description": prompt or ""}
-
-        style = caption.setdefault("style_description", {})
-        if not isinstance(style, dict):
-            style = {}
-            caption["style_description"] = style
 
         for group, selected in (
             ("look_recipe", look_recipe),
@@ -827,29 +813,13 @@ JSON fields.
             )
 
         all_control_lines = fingerprint_lines + counter_lines
-        lighting_lines = _lines_matching(
-            all_control_lines,
-            ["light", "shadow", "highlight", "white", "overcast", "window", "flash",
-             "bloom", "clip", "rolloff", "exposure", "contrast", "tonal", "hazy", "humid"],
-        )
-        photo_lines = _lines_matching(
-            all_control_lines,
-            ["edge", "sharp", "falloff", "blur", "microcontrast", "texture", "grain",
-             "noise", "compression", "scan", "digital", "lens", "rendering", "skin", "material"],
-        )
-        color_lines = _lines_matching(
-            all_control_lines,
-            ["color", "hue", "skin", "undertone", "white", "green", "olive", "cyan",
-             "teal", "orange", "cream", "palette", "saturation", "warm", "cool"],
-        )
+        control_text = _join_control_lines(all_control_lines)
 
         aesthetics_parts = []
         if fingerprint_lines:
             aesthetics_parts.append("visual fingerprint: " + _join_control_lines(fingerprint_lines))
         if counter_lines:
             aesthetics_parts.append("counter-spec: " + _join_control_lines(counter_lines))
-        if color_lines:
-            aesthetics_parts.append("color behavior: " + _join_control_lines(color_lines))
         if drift_lines:
             aesthetics_parts.append("avoid neighboring drift: " + _join_control_lines(drift_lines))
         if shorthand_lines:
@@ -859,8 +829,8 @@ JSON fields.
 
         style = {
             "aesthetics": ". ".join(aesthetics_parts) if aesthetics_parts else "observable rendering behavior, not broad aesthetic shorthand",
-            "lighting": _join_control_lines(lighting_lines) or "follow the prompt block's lighting while preserving the visual fingerprint",
-            "photo": _join_control_lines(photo_lines) or "rendering-language control over camera-language attribution",
+            "lighting": control_text or "follow the prompt block's lighting while preserving the visual fingerprint",
+            "photo": control_text or "rendering-language control over camera-language attribution",
             "medium": "photorealistic image with generator-safe visual fingerprint controls",
         }
         palette = _extract_hex_palette(visual_fingerprint, counter_spec, prompt_block, base_prompt)
