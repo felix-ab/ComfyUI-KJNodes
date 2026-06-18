@@ -426,3 +426,173 @@ Toolbar:
         if used_import:                                       # mirror the import in the editor (only when used)
             ui["caption"] = [_dumps(imported)]
         return io.NodeOutput(dump(caption), preview, bboxes_out, width, height, ui=ui)
+
+
+_ARTIST_CONTROL_PROFILES = {
+    "lens": {
+        "unchanged": {},
+        "portrait telephoto": {
+            "photo": "moderate telephoto portrait lens, natural compression, close focus, realistic iris and skin detail",
+            "aesthetics": "controlled portrait perspective, no wide-angle distortion, believable facial proportions",
+            "lighting": "soft catchlights with gentle highlight rolloff",
+        },
+        "editorial wide normal": {
+            "photo": "35mm to 45mm editorial lens feel, environmental context, natural perspective",
+            "aesthetics": "camera-native editorial framing, grounded spatial depth, no exaggerated distortion",
+            "lighting": "available-light look with realistic falloff across the scene",
+        },
+        "macro product": {
+            "photo": "macro product lens behavior, close focusing distance, shallow depth of field, crisp material edges",
+            "aesthetics": "precise product geometry, controlled specular highlights, clean surface detail",
+            "lighting": "softbox-style highlight control with defined reflection shape",
+        },
+        "documentary 35mm": {
+            "photo": "documentary 35mm camera feel, natural hand-held framing, unforced perspective",
+            "aesthetics": "real-world composition, slight observational imperfection, non-advertising finish",
+            "lighting": "ambient natural light with believable mixed-color spill",
+        },
+    },
+    "color": {
+        "unchanged": {},
+        "cinematic natural color": {
+            "aesthetics": "cinematic natural color, restrained saturation, accurate skin and material color",
+            "lighting": "neutral-to-warm highlights, clean midtones, soft cool shadows",
+        },
+        "high-key pastel editorial": {
+            "aesthetics": "high-key pastel editorial grade, airy contrast, controlled pale color separation",
+            "lighting": "soft bright highlights, lifted shadows, gentle bloom without washed-out subject detail",
+        },
+        "wet neon night": {
+            "aesthetics": "wet neon color separation, saturated reflections, deep blue shadows, clean magenta-cyan accents",
+            "lighting": "blue-hour ambient light mixed with localized neon reflections and glossy pavement highlights",
+        },
+        "muted filmic documentary": {
+            "aesthetics": "muted filmic palette, restrained contrast, natural greens and warm skin tones",
+            "lighting": "soft practical light, low digital harshness, realistic shadow color",
+        },
+        "product accurate color": {
+            "aesthetics": "product-accurate color, clean whites, stable neutral balance, no unwanted hue drift",
+            "lighting": "controlled studio highlights that preserve texture and material color",
+        },
+    },
+    "surface": {
+        "unchanged": {},
+        "natural skin and fabric": {
+            "aesthetics": "natural skin pores, subtle freckles, realistic fabric weave, no porcelain smoothing",
+            "photo": "fine skin texture and cloth fibers resolved without over-sharpening",
+        },
+        "polished automotive": {
+            "aesthetics": "polished paint, chrome edge definition, curved reflection fidelity, realistic tire and glass materials",
+            "lighting": "large soft reflections across body panels, sharp pin highlights on chrome",
+        },
+        "ceramic and window light": {
+            "aesthetics": "matte ceramic texture, hand-made surface variation, soft clay detail, quiet studio realism",
+            "lighting": "north-window softness, gentle rim on ceramic edges, warm interior bounce",
+        },
+        "rain and wet pavement": {
+            "aesthetics": "wet pavement micro-reflections, rain beads, mist, believable glossy surface breakup",
+            "lighting": "small specular points in water droplets and broad reflections on slick ground",
+        },
+    },
+}
+
+
+def _append_artist_text(existing, addition):
+    existing = (existing or "").strip()
+    addition = (addition or "").strip()
+    if not addition:
+        return existing
+    if not existing:
+        return addition
+    if addition.lower() in existing.lower():
+        return existing
+    return f"{existing}. {addition}"
+
+
+def _loads_artist_caption(prompt):
+    try:
+        parsed = json.loads(prompt)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+class Ideogram4ArtistControlsKJ(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="Ideogram4ArtistControlsKJ",
+            display_name="Ideogram 4 Artist Controls KJ",
+            category="KJNodes/text",
+            search_aliases=["ideogram", "artist controls", "lens", "color", "surface"],
+            is_experimental=True,
+            description="""
+Deterministic pro-artist control layer for Ideogram 4 structured JSON prompts.
+
+Use this after Ideogram 4 Prompt Builder KJ. It appends concise, named control
+profiles into the standard Ideogram JSON fields instead of adding non-standard
+schema keys. This keeps runtime latency at zero and preserves compatibility with
+existing Ideogram workflows while making lens, color, and surface intent explicit.
+""",
+            inputs=[
+                io.String.Input("prompt", multiline=True, force_input=True,
+                                tooltip="Structured Ideogram JSON prompt from Ideogram 4 Prompt Builder KJ."),
+                io.Combo.Input("lens_profile", options=list(_ARTIST_CONTROL_PROFILES["lens"].keys()),
+                               default="unchanged",
+                               tooltip="Camera/lens behavior to append to photo, aesthetics, and lighting fields."),
+                io.Combo.Input("color_profile", options=list(_ARTIST_CONTROL_PROFILES["color"].keys()),
+                               default="unchanged",
+                               tooltip="Color science and grade behavior to append to aesthetics and lighting fields."),
+                io.Combo.Input("surface_profile", options=list(_ARTIST_CONTROL_PROFILES["surface"].keys()),
+                               default="unchanged",
+                               tooltip="Texture/material behavior to append to relevant style fields."),
+                io.Combo.Input("control_strength", options=["light", "medium", "strong"], default="medium",
+                               tooltip="How much custom artist language to apply. Profiles stay concise at every strength."),
+                io.String.Input("artist_notes", multiline=True, default="",
+                                tooltip="Optional short notes appended to high_level_description. Keep this intentional."),
+                io.Combo.Input("output_format", options=["compact", "pretty"], default="compact",
+                               tooltip="JSON formatting for the output prompt."),
+            ],
+            outputs=[
+                io.String.Output(display_name="prompt"),
+            ],
+        )
+
+    @classmethod
+    def execute(cls, prompt, lens_profile="unchanged", color_profile="unchanged",
+                surface_profile="unchanged", control_strength="medium",
+                artist_notes="", output_format="compact") -> io.NodeOutput:
+        caption = _loads_artist_caption(prompt)
+        if caption is None:
+            caption = {"high_level_description": prompt or ""}
+
+        style = caption.setdefault("style_description", {})
+        if not isinstance(style, dict):
+            style = {}
+            caption["style_description"] = style
+
+        for group, selected in (
+            ("lens", lens_profile),
+            ("color", color_profile),
+            ("surface", surface_profile),
+        ):
+            profile = _ARTIST_CONTROL_PROFILES[group].get(selected, {})
+            for field, text in profile.items():
+                style[field] = _append_artist_text(style.get(field, ""), text)
+
+        if artist_notes.strip():
+            notes = artist_notes.strip()
+            if control_strength == "light":
+                notes = notes.split(".")[0].strip()
+            elif control_strength == "strong":
+                notes = _append_artist_text(notes, "prioritize this control intent over generic style drift")
+            caption["high_level_description"] = _append_artist_text(
+                caption.get("high_level_description", ""),
+                notes,
+            )
+
+        if output_format == "pretty":
+            output = _dumps(caption)
+        else:
+            output = json.dumps(caption, ensure_ascii=False, separators=(",", ":"))
+        return io.NodeOutput(output)

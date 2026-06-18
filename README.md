@@ -5,6 +5,20 @@ At this point pretty random collection of utility, model optimization and QoL no
 
 Documentation is mostly in the node descriptions and tooltips.
 
+## Fork Direction: Ideogram Artist Prompt Builder
+
+This public fork is starting a UX-first redesign of the Ideogram 4 prompt
+builder. The core rule is that a larger control surface is only an upgrade when
+it remains intuitive during real creative work.
+
+The first added node is `Ideogram 4 Artist Controls KJ`, a deterministic,
+zero-latency companion for `Ideogram 4 Prompt Builder KJ`. It takes the existing
+structured Ideogram JSON prompt and applies named lens, color, and surface
+control profiles without adding non-standard JSON keys or hidden network calls.
+
+Design notes and roadmap live in
+[`docs/ideogram-artist-prompt-builder.md`](docs/ideogram-artist-prompt-builder.md).
+
 # Installation
 1. Clone this repo into `custom_nodes` folder.
 2. Install dependencies: `pip install -r requirements.txt`
@@ -81,4 +95,3 @@ Complete (backwards compatible as far as I'm aware currently) rewrite of Set/Get
 
 
 ---
-
