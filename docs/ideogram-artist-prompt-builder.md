@@ -53,7 +53,12 @@ This fork adds `Ideogram 4 Artist Controls KJ`, a deterministic companion node
 that accepts the JSON output of `Ideogram 4 Prompt Builder KJ` and appends
 concise control language into standard Ideogram fields.
 
-It currently supports:
+This fork also adds `Ideogram 4 Visual Fingerprint KJ`, a deterministic
+reference-translation node. It accepts a visual fingerprint protocol output and
+turns it into Ideogram structured JSON without doing camera attribution or hidden
+vision analysis.
+
+`Ideogram 4 Artist Controls KJ` currently supports:
 
 - look recipes
 - lens profiles
@@ -70,6 +75,28 @@ It intentionally does not add new non-standard JSON keys. Instead it augments:
 - `high_level_description`
 
 This is a compatibility-first bridge while the full canvas UX is redesigned.
+
+`Ideogram 4 Visual Fingerprint KJ` supports:
+
+- full paste of a 1-6 visual fingerprint protocol
+- separate visual fingerprint, counter-spec, drift risks, prompt, negative
+  constraints, and optional shorthand references
+- text-to-image and image-to-image control wording
+- separate positive structured JSON output and negative constraint output
+
+It maps the protocol into:
+
+- `high_level_description` for the prompt block and preservation intent
+- `style_description.aesthetics` for fingerprint, counter-spec, color behavior,
+  drift risks, shorthand limits, and avoid text
+- `style_description.lighting` for light, shadow, highlight, bloom, contrast,
+  humidity, flash, and exposure behavior
+- `style_description.photo` for edge behavior, sharpness falloff, texture,
+  grain, noise, compression, scan, lens, skin, and material rendering
+- `style_description.color_palette` when hex colors are present
+
+The important design rule is that this node does not ask "what camera is this?"
+It asks "what observable rendering behavior must survive generation?"
 
 ## Look Grammar
 

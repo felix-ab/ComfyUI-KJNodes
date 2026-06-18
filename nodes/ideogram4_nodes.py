@@ -582,6 +582,94 @@ def _loads_artist_caption(prompt):
         return None
 
 
+_FINGERPRINT_SECTION_RE = re.compile(
+    r"(?im)^\s*(?:#{1,6}\s*)?(?:[1-6]\s*[\).]\s*)?"
+    r"(visual fingerprint|drift risks|counter-spec|prompt|negative constraints|optional shorthand references)\s*$"
+)
+
+
+def _clean_control_lines(text):
+    lines = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("```"):
+            continue
+        line = re.sub(r"^\s*(?:[-*]+|\d+\s*[\).])\s*", "", line).strip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _clean_control_text(text):
+    return " ".join(_clean_control_lines(text))
+
+
+def _parse_fingerprint_protocol(text):
+    if not text or not text.strip():
+        return {}
+    matches = list(_FINGERPRINT_SECTION_RE.finditer(text))
+    if not matches:
+        return {}
+    sections = {}
+    aliases = {
+        "visual fingerprint": "visual_fingerprint",
+        "drift risks": "drift_risks",
+        "counter-spec": "counter_spec",
+        "prompt": "prompt_block",
+        "negative constraints": "negative_constraints",
+        "optional shorthand references": "optional_shorthand_refs",
+    }
+    for idx, match in enumerate(matches):
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        key = aliases[match.group(1).lower()]
+        body = text[start:end].strip()
+        if body:
+            sections[key] = body
+    return sections
+
+
+def _merge_section(parsed, explicit, key):
+    parts = []
+    if parsed.get(key):
+        parts.append(parsed[key])
+    if explicit and explicit.strip():
+        parts.append(explicit.strip())
+    return "\n".join(parts)
+
+
+def _lines_matching(lines, keywords):
+    out = []
+    for line in lines:
+        low = line.lower()
+        if any(k in low for k in keywords):
+            out.append(line)
+    return out
+
+
+def _join_control_lines(lines):
+    seen = set()
+    out = []
+    for line in lines:
+        key = line.lower()
+        if key not in seen:
+            out.append(line)
+            seen.add(key)
+    return "; ".join(out)
+
+
+def _extract_hex_palette(*texts):
+    colors = []
+    seen = set()
+    for text in texts:
+        for color in re.findall(r"#[0-9A-Fa-f]{6}", text or ""):
+            up = color.upper()
+            if up not in seen:
+                colors.append(up)
+                seen.add(up)
+    return colors
+
+
 class Ideogram4ArtistControlsKJ(io.ComfyNode):
     @classmethod
     def define_schema(cls):
@@ -664,3 +752,132 @@ existing Ideogram workflows while making look, lens, color, and surface intent e
         else:
             output = json.dumps(caption, ensure_ascii=False, separators=(",", ":"))
         return io.NodeOutput(output)
+
+
+class Ideogram4VisualFingerprintKJ(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="Ideogram4VisualFingerprintKJ",
+            display_name="Ideogram 4 Visual Fingerprint KJ",
+            category="KJNodes/text",
+            search_aliases=["ideogram", "visual fingerprint", "reference", "anti drift", "camera", "film", "prompt"],
+            is_experimental=True,
+            description="""
+Converts a reference-analysis visual fingerprint into Ideogram 4 structured JSON.
+
+This node does not identify cameras or analyze pixels. Paste the output of a
+reference-analysis protocol, or fill the sections manually. The node preserves
+observable rendering controls - color relationships, tonal mapping, edge
+behavior, texture, lighting, and anti-drift constraints - in normal Ideogram
+JSON fields.
+""",
+            inputs=[
+                io.String.Input("protocol_text", multiline=True, default="",
+                                tooltip="Optional full 1-6 protocol output. Parsed sections are merged with the fields below."),
+                io.String.Input("base_prompt", multiline=True, default="",
+                                tooltip="Subject/composition prompt if the protocol has no prompt block."),
+                io.String.Input("visual_fingerprint", multiline=True, default="",
+                                tooltip="Concrete observable traits: color relationships, tone, texture, edges, lighting, framing."),
+                io.String.Input("counter_spec", multiline=True, default="",
+                                tooltip="Generator-safe control layer that prevents drift."),
+                io.String.Input("drift_risks", multiline=True, default="",
+                                tooltip="Likely wrong neighboring aesthetics. Preserved as anti-drift guidance."),
+                io.String.Input("negative_constraints", multiline=True, default="",
+                                tooltip="Dense avoid line. Also returned as a separate negative output."),
+                io.String.Input("optional_shorthand_refs", multiline=True, default="",
+                                tooltip="Optional secondary camera/film shorthand with limits unpacked in text."),
+                io.Combo.Input("target_mode", options=["text-to-image", "image-to-image"], default="text-to-image",
+                               tooltip="Image-to-image mode adds reference-preservation language without adding image analysis."),
+                io.Combo.Input("output_format", options=["compact", "pretty"], default="compact",
+                               tooltip="JSON formatting for the Ideogram prompt output."),
+            ],
+            outputs=[
+                io.String.Output(display_name="prompt"),
+                io.String.Output(display_name="negative"),
+            ],
+        )
+
+    @classmethod
+    def execute(cls, protocol_text="", base_prompt="", visual_fingerprint="",
+                counter_spec="", drift_risks="", negative_constraints="",
+                optional_shorthand_refs="", target_mode="text-to-image",
+                output_format="compact") -> io.NodeOutput:
+        parsed = _parse_fingerprint_protocol(protocol_text)
+        visual_fingerprint = _merge_section(parsed, visual_fingerprint, "visual_fingerprint")
+        counter_spec = _merge_section(parsed, counter_spec, "counter_spec")
+        drift_risks = _merge_section(parsed, drift_risks, "drift_risks")
+        negative_constraints = _merge_section(parsed, negative_constraints, "negative_constraints")
+        optional_shorthand_refs = _merge_section(parsed, optional_shorthand_refs, "optional_shorthand_refs")
+        prompt_block = _merge_section(parsed, "", "prompt_block")
+
+        fingerprint_lines = _clean_control_lines(visual_fingerprint)
+        counter_lines = _clean_control_lines(counter_spec)
+        drift_lines = _clean_control_lines(drift_risks)
+        shorthand_lines = _clean_control_lines(optional_shorthand_refs)
+        negative_text = _clean_control_text(negative_constraints)
+
+        base = prompt_block.strip() or base_prompt.strip()
+        if not base:
+            base = _join_control_lines((fingerprint_lines + counter_lines)[:4]) or "Image controlled by the visual fingerprint."
+        if target_mode == "image-to-image":
+            base = _append_artist_text(
+                base,
+                "preserve the reference image's observable rendering fingerprint rather than guessing camera metadata",
+            )
+
+        all_control_lines = fingerprint_lines + counter_lines
+        lighting_lines = _lines_matching(
+            all_control_lines,
+            ["light", "shadow", "highlight", "white", "overcast", "window", "flash",
+             "bloom", "clip", "rolloff", "exposure", "contrast", "tonal", "hazy", "humid"],
+        )
+        photo_lines = _lines_matching(
+            all_control_lines,
+            ["edge", "sharp", "falloff", "blur", "microcontrast", "texture", "grain",
+             "noise", "compression", "scan", "digital", "lens", "rendering", "skin", "material"],
+        )
+        color_lines = _lines_matching(
+            all_control_lines,
+            ["color", "hue", "skin", "undertone", "white", "green", "olive", "cyan",
+             "teal", "orange", "cream", "palette", "saturation", "warm", "cool"],
+        )
+
+        aesthetics_parts = []
+        if fingerprint_lines:
+            aesthetics_parts.append("visual fingerprint: " + _join_control_lines(fingerprint_lines))
+        if counter_lines:
+            aesthetics_parts.append("counter-spec: " + _join_control_lines(counter_lines))
+        if color_lines:
+            aesthetics_parts.append("color behavior: " + _join_control_lines(color_lines))
+        if drift_lines:
+            aesthetics_parts.append("avoid neighboring drift: " + _join_control_lines(drift_lines))
+        if shorthand_lines:
+            aesthetics_parts.append("secondary shorthand only: " + _join_control_lines(shorthand_lines))
+        if negative_text:
+            aesthetics_parts.append("avoid: " + negative_text)
+
+        style = {
+            "aesthetics": ". ".join(aesthetics_parts) if aesthetics_parts else "observable rendering behavior, not broad aesthetic shorthand",
+            "lighting": _join_control_lines(lighting_lines) or "follow the prompt block's lighting while preserving the visual fingerprint",
+            "photo": _join_control_lines(photo_lines) or "rendering-language control over camera-language attribution",
+            "medium": "photorealistic image with generator-safe visual fingerprint controls",
+        }
+        palette = _extract_hex_palette(visual_fingerprint, counter_spec, prompt_block, base_prompt)
+        if palette:
+            style["color_palette"] = palette
+
+        caption = {
+            "high_level_description": base,
+            "style_description": style,
+            "compositional_deconstruction": {
+                "background": "Follow the prompt block for scene and background; apply the same tonal, color, edge, and texture behavior across the whole frame.",
+                "elements": [],
+            },
+        }
+
+        if output_format == "pretty":
+            output = _dumps(caption)
+        else:
+            output = json.dumps(caption, ensure_ascii=False, separators=(",", ":"))
+        return io.NodeOutput(output, negative_text)

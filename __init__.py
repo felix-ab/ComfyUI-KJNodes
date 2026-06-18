@@ -81,7 +81,11 @@ from .nodes.sharpen_nodes import ImageSharpenKJ
 from .nodes.hdr_preview_node import HDRPreviewKJ
 from .nodes.preview_override_node import ModelPreviewOverrideKJ, GetPreviewOverrideFramesKJ
 from .nodes.context_windows_visualizer import ContextWindowsVisualizerKJ
-from .nodes.ideogram4_nodes import Ideogram4PromptBuilderKJ, Ideogram4ArtistControlsKJ
+from .nodes.ideogram4_nodes import (
+    Ideogram4PromptBuilderKJ,
+    Ideogram4ArtistControlsKJ,
+    Ideogram4VisualFingerprintKJ,
+)
 
 import logging
 
@@ -190,6 +194,7 @@ NODE_CONFIG = {
     "ImageTransformKJ": {"class": ImageTransformKJ, "name": "Image Transform KJ"},
     "Ideogram4PromptBuilderKJ": {"class": Ideogram4PromptBuilderKJ, "name": "Ideogram 4 Prompt Builder KJ"},
     "Ideogram4ArtistControlsKJ": {"class": Ideogram4ArtistControlsKJ, "name": "Ideogram 4 Artist Controls KJ"},
+    "Ideogram4VisualFingerprintKJ": {"class": Ideogram4VisualFingerprintKJ, "name": "Ideogram 4 Visual Fingerprint KJ"},
     "HDRPreviewKJ": {"class": HDRPreviewKJ, "name": "HDR Preview KJ"},
     "ModelPreviewOverrideKJ": {"class": ModelPreviewOverrideKJ, "name": "Model Preview Override KJ"},
     "GetPreviewOverrideFramesKJ": {"class": GetPreviewOverrideFramesKJ, "name": "Get Preview Override Frames KJ"},

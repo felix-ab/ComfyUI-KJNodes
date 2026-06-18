@@ -11,10 +11,14 @@ This public fork is starting a UX-first redesign of the Ideogram 4 prompt
 builder. The core rule is that a larger control surface is only an upgrade when
 it remains intuitive during real creative work.
 
-The first added node is `Ideogram 4 Artist Controls KJ`, a deterministic,
-zero-latency companion for `Ideogram 4 Prompt Builder KJ`. It takes the existing
-structured Ideogram JSON prompt and applies named lens, color, and surface
-control profiles without adding non-standard JSON keys or hidden network calls.
+The first added nodes are deterministic, zero-latency companions for
+`Ideogram 4 Prompt Builder KJ`.
+
+- `Ideogram 4 Artist Controls KJ` applies named look, lens, color, and surface
+  control profiles without adding non-standard JSON keys or hidden network calls.
+- `Ideogram 4 Visual Fingerprint KJ` converts a reference-analysis protocol into
+  Ideogram structured JSON, prioritizing observable rendering behavior over
+  camera or film-stock attribution.
 
 Design notes and roadmap live in
 [`docs/ideogram-artist-prompt-builder.md`](docs/ideogram-artist-prompt-builder.md).
